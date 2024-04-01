@@ -180,10 +180,9 @@ function calculate(){
     let dateStart = new Date (document.getElementById("date").value)
     //смещение расчетов выплат на месяц от даты выдачи
     dateStart.setDate(1)
-    let currentMonth=dateStart
+    let currentMonth=new Date (dateStart)
     let settlementDate=new Date (dateStart.setDate(1))
         settlementDate.setMonth(dateStart.getMonth()+1)
-
     let currency = getCurrency()
     let currency_debt = equivalent
     let debt=amount
@@ -194,7 +193,6 @@ function calculate(){
     let marginFromContract
     let pmtCounter=investment_period
     let inflationsRateOnDate=0
-
 
     let resArray = []
     let monthResArray = {}
@@ -410,9 +408,9 @@ function calculate(){
                 //raty równe
                 monthResArray.equal_pko_interest_rate=wibor3M_PLN+marginFromContract
                 monthResArray.equal_pko_debt=amount-sum_equal_pko_debt
-                monthResArray.equal_pko_interest_installments=(monthResArray.equal_pko_debt*(monthResArray.equal_pko_interest_rate/100))/12
+                monthResArray.equal_pko_interest_installments=(investment_period-period)?(monthResArray.equal_pko_debt*(monthResArray.equal_pko_interest_rate/100))/12:0
                 monthResArray.equal_pko_total_installments=(-pmt(((monthResArray.equal_pko_interest_rate)/12)/100, pmtCounter, monthResArray.equal_pko_debt,0,0))
-                monthResArray.equal_pko_capital_installments=monthResArray.equal_pko_total_installments-monthResArray.equal_pko_interest_installments
+                monthResArray.equal_pko_capital_installments=(investment_period-period)?monthResArray.equal_pko_total_installments-monthResArray.equal_pko_interest_installments:0
                 monthResArray.equal_pko_underpayment_overpayment=monthResArray.accrued_installment_in_PLN-monthResArray.equal_pko_total_installments
 
 //-------------------------------------
@@ -477,6 +475,7 @@ function calculate(){
     let sumPMT=0
     let interestRateAfterMaturity=parseFloat(baseRates[baseRates.length-1]["PLN"])+marginFromContract
     let amountOwedAfterRepayment=0
+    let amountOwedAfterRepaymentUnderpayment=0
     let sumValorizationOfTheBorrowersRepayments=0
     let f=1;
     let date=new Date()
@@ -522,8 +521,10 @@ function calculate(){
                 sumPMT+=item.PMT
             }
             if (item.equal_pko_capital_installments){
-                amountOwedAfterRepayment+=item.equal_pko_capital_installments+item.equal_pko_underpayment_overpayment
+                amountOwedAfterRepayment+=item.equal_pko_capital_installments
             }
+            if (item.equal_pko_underpayment_overpayment)
+                amountOwedAfterRepaymentUnderpayment+=-(item.equal_pko_underpayment_overpayment)
         }
         else if (item.PMT){
             sumPMT+=item.installments_without_indexation_total_installment_in_PLN_2
@@ -652,7 +653,7 @@ function calculate(){
             cell.textContent = interestRateAfterMaturity.toFixed(2)
         }
         if (cell.dataset.content==='amount_owed_after_repayment') {
-            cell.textContent = (amount-amountOwedAfterRepayment).toFixed(2)
+            cell.textContent = (amount-(amountOwedAfterRepayment-amountOwedAfterRepaymentUnderpayment)).toFixed(2)
         }
         if (cell.dataset.content==='total_loan_payments_due_to_the_bank_after_conversion') {
             cell.textContent = ((!installmentSystem)?sumEqualPkoTotalInstallments:sumDegressivePkoTotalInstallments).toFixed(2)
@@ -661,7 +662,7 @@ function calculate(){
             cell.textContent = (((!installmentSystem)?sumEqualPkoTotalInstallments:sumDegressivePkoTotalInstallments)+(amount-amountOwedAfterRepayment)).toFixed(2)
         }
         if (cell.dataset.content==='overall_benefit_to_the_borrower_table_4') {
-            cell.textContent = (!isNaN(currentAmountOwed)?(currentAmountOwed*currentSellingRate-(amount-amountOwedAfterRepayment)):amountOwedAfterRepayment-amount).toFixed(2)
+            cell.textContent = (!isNaN(currentAmountOwed)?(currentAmountOwed*currentSellingRate-(amount-amountOwedAfterRepayment)):-(amount-(amountOwedAfterRepayment-amountOwedAfterRepaymentUnderpayment)).toFixed(2))
         }
 
 
@@ -679,7 +680,7 @@ function calculate(){
             cell.textContent = (amount+sumClaimRemuneration).toFixed(2)
         }
         if (cell.dataset.content==='amount_of_the_banks_claims') {
-            cell.textContent = (totalLoanRepaymentsInCurrency*exchange_rate[exchange_rate.length-1][currency]+sumClaimRemuneration).toFixed(2)
+            cell.textContent = ((amount+sumClaimRemuneration)-totalLoanRepaymentsInCurrency*exchange_rate[exchange_rate.length-1][currency]).toFixed(2)
         }
 
 
@@ -699,16 +700,18 @@ function calculate(){
             cell.textContent = amount.toFixed(2)
         }
         for (let i=0; i<inflation.length; i++){
+            console.log (inflation[i])
             let date=new Date (inflation[i]["date"])
-            if (date.getMonth() === dateStart.getMonth() && date.getFullYear() === dateStart.getFullYear()-1){
-                inflationsRateOnDate=parseFloat(inflation[i]["inflations_rate"])
+            if (date.getMonth() === dateStart.getMonth() && date.getFullYear() === dateStart.getFullYear()){
+                inflationsRateOnDate=parseFloat(inflation[i]["inflation"])
                 break
             }
             else{
-                inflationsRateOnDate=parseFloat(inflation[inflation.length-1]["inflations_rate"])
+                inflationsRateOnDate=parseFloat(inflation[inflation.length-1]["inflation"])
             }
         }
-
+        console.log (dateStart)
+        console.log (inflationsRateOnDate)
         if (cell.dataset.content==='credit_amount_additional') {
             cell.textContent = ((amount*inflationsRateOnDate)/100).toFixed(2)
         }
@@ -727,7 +730,7 @@ function calculate(){
             cell.textContent = ((amount*inflationsRateOnDate)/100+amount).toFixed(2)
         }
         if (cell.dataset.content==='payments_to_the_borrower_including_prepayments_PLN_nominal') {
-            cell.textContent = totalLoanRepaymentsInPLN.toFixed(2)
+            cell.textContent = totalLoanPaymentsCollectedByTheBank.toFixed(2)
         }
         if (cell.dataset.content==='payments_to_the_borrower_including_prepayments_PLN_additional') {
             cell.textContent = sumValorizationOfTheBorrowersRepayments.toFixed(2)
@@ -739,13 +742,13 @@ function calculate(){
 
 
         if (cell.dataset.content==='difference_PLN_nominal') {
-            cell.textContent = (totalLoanRepaymentsInPLN-amount).toFixed(2)
+            cell.textContent = (totalLoanPaymentsCollectedByTheBank-amount).toFixed(2)
         }
         if (cell.dataset.content==='difference_PLN_additional') {
             cell.textContent = (sumValorizationOfTheBorrowersRepayments-(amount*inflationsRateOnDate)/100).toFixed(2)
         }
         if (cell.dataset.content==='difference_PLN_total') {
-            cell.textContent = ((sumValorizationOfTheBorrowersRepayments+totalLoanRepaymentsInPLN)-((amount*inflationsRateOnDate)/100+amount)).toFixed(2)
+            cell.textContent = ((sumValorizationOfTheBorrowersRepayments+totalLoanPaymentsCollectedByTheBank)-((amount*inflationsRateOnDate)/100+amount)).toFixed(2)
         }
 
     }
